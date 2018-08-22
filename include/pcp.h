@@ -106,7 +106,8 @@ void initialize(graph* G, int argc, char** argv)
     }
 
     omp_set_num_threads(NUM_THREADS);
-    printf("omp_get_num_threads(): %d\n",omp_get_max_threads());
+//    printf("omp_get_num_threads(): %d\n",omp_get_max_threads());
+
     //////////////////////////////////////////
     // read csr file
     //////////////////////////////////////////
