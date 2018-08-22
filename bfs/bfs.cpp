@@ -26,7 +26,7 @@ struct BFS_F{
         return (((!visited[node])<<31) | node);
     }
 
-    inline bool reInit(unsigned int node)
+    inline bool initFunc(unsigned int node)
     {
         return false;
     }
@@ -48,7 +48,7 @@ struct BFS_F{
         return false;
     }  
     
-    inline bool apply(unsigned int node)
+    inline bool filterFunc(unsigned int node)
     {
         return true;
     } 
@@ -63,7 +63,7 @@ struct BFS_F2{
         return ((parent[node] & MAX_NEG)| node);
     }
 
-    inline bool reInit(unsigned int node)
+    inline bool initFunc(unsigned int node)
     {
         return false;
     }
@@ -78,7 +78,7 @@ struct BFS_F2{
         return false;
     }  
     
-    inline bool apply(unsigned int node)
+    inline bool filterFunc(unsigned int node)
     {
         return true;
     } 
@@ -123,7 +123,7 @@ int main(int argc, char** argv)
         numIter=0;
         while((G.frontierSize > 0))
         {
-            pcpm<unsigned int>(&G, BFS_F(parent, visited));
+            scatter_and_gather<unsigned int>(&G, BFS_F(parent, visited));
 //            pcpm<unsigned int>(&G, BFS_F2(parent));
             numIter++;
          }   

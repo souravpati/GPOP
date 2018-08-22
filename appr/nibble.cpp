@@ -32,7 +32,7 @@ struct PR_F{
     {
         return pageRankScat[node];
     }
-    inline bool reInit(unsigned int node)
+    inline bool initFunc(unsigned int node)
     {
         pageRank[node]=pageRank[node]/2;
         pageRankScat[node] = 0;
@@ -43,7 +43,7 @@ struct PR_F{
         pageRank[destId] += updateVal;
         return (updateVal > 0);
     }
-    inline bool apply(unsigned int node)
+    inline bool filterFunc(unsigned int node)
     {
         bool cond = (pageRank[node] >= threshold*deg[node]);
         if (!cond)
@@ -98,7 +98,7 @@ int main(int argc, char** argv)
 
         while(numIter < MAX_ITER)
         {
-            pcpm<float>(&G, PR_F(pcurr, pscat, G.outDeg));   
+            scatter_and_gather<float>(&G, PR_F(pcurr, pscat, G.outDeg));   
             numIter++;
         }   
 

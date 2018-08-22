@@ -57,7 +57,7 @@ unsigned int edgesPerIteration;
 #define ITERTIME
 #undef ITERTIME
 
-int NUM_THREADS = 16;
+int NUM_THREADS = std::max(atoi(std::getenv("OMP_NUM_THREADS")), 1);
 int MAX_THREADS = 36;
 int MAX_ITER = 1000000;
 
@@ -106,7 +106,7 @@ void initialize(graph* G, int argc, char** argv)
     }
 
     omp_set_num_threads(NUM_THREADS);
-
+    printf("omp_get_num_threads(): %d\n",omp_get_max_threads());
     //////////////////////////////////////////
     // read csr file
     //////////////////////////////////////////
@@ -237,7 +237,7 @@ void initBin(graph* G)
 
 
 template<class type, class graph, class userArg>
-void pcpm(graph* G, userArg UA)
+void scatter_and_gather(graph* G, userArg UA)
 {
 #ifdef ITERTIME
     float time;

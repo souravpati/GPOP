@@ -1,7 +1,7 @@
 CC      = g++
 CPPFLAGS= -O3 -c -std=c++11 -fopenmp -mavx -w 
 LDFLAGS = -fopenmp -m64 -lpthread 
-SOURCES = nibble.cpp ../src/partition.cpp ../src/gas.cpp ../src/graph.cpp ../src/sort.cpp 
+SOURCES = nibble.cpp ../src/sort.cpp
 OBJECTS = $(SOURCES:.cpp=.o)
 
 all: $(SOURCES) nibble

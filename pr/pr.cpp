@@ -28,7 +28,7 @@ struct PR_F{
         return pageRank[node];
     }
 #ifndef DENSE
-    inline bool reInit(unsigned int node)
+    inline bool initFunc(unsigned int node)
     {
         pageRank[node]=0;
         return true;
@@ -38,7 +38,7 @@ struct PR_F{
         pageRank[destId] += updateVal;
         return true;
     }
-    inline bool apply(unsigned int node)
+    inline bool filterFunc(unsigned int node)
     {
         pageRank[node] = ((damping) + (1-damping)*pageRank[node]);
         if (deg[node]>0)
@@ -46,7 +46,7 @@ struct PR_F{
         return true;
     } 
 #else
-    inline void reInit(unsigned int node)
+    inline void initFunc(unsigned int node)
     {
         pageRank[node]=0;
     }
@@ -54,7 +54,7 @@ struct PR_F{
     {
         pageRank[destId] += updateVal;
     }
-    inline void apply(unsigned int node)
+    inline void filterFunc(unsigned int node)
     {
         pageRank[node] = ((damping) + (1-damping)*pageRank[node]);
         if (deg[node]>0)
@@ -105,7 +105,7 @@ int main(int argc, char** argv)
 
         while(numIter < MAX_ITER)
         {
-            pcpm<float>(&G, PR_F(pcurr, G.outDeg));
+            scatter_and_gather<float>(&G, PR_F(pcurr, G.outDeg));
             numIter++;
         }
 

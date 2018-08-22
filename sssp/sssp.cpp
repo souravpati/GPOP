@@ -26,7 +26,7 @@ struct SSSP_F{
         return distance[node];
     }
 
-    inline bool reInit(unsigned int node)
+    inline bool initFunc(unsigned int node)
     {
         return false;
     }
@@ -42,7 +42,7 @@ struct SSSP_F{
             return false;
     }  
     
-    inline bool apply(unsigned int node)
+    inline bool filterFunc(unsigned int node)
     {
         return true;
     } 
@@ -87,7 +87,7 @@ int main(int argc, char** argv)
 
          while((G.frontierSize > 0) && (numIter < G.numVertex))
          {
-            pcpm<unsigned int>(&G, SSSP_F(distance));
+            scatter_and_gather<unsigned int>(&G, SSSP_F(distance));
             numIter++;
           }
 

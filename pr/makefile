@@ -4,7 +4,7 @@ CC      = g++
 #LDFLAGS = -fopenmp -m64 -lpthread -L ../../../pcm/cpucounters.o ../../../pcm/pci.o ../../../pcm/msr.o ../../../pcm/client_bw.o ../../../pcm/cpucounters.o 
 CPPFLAGS= -O3 -c -std=c++11 -fopenmp -mavx -w 
 LDFLAGS = -fopenmp -m64 -lpthread 
-SOURCES = pr.cpp ../src/partition.cpp ../src/gas.cpp ../src/graph.cpp ../src/sort.cpp 
+SOURCES = pr.cpp ../src/sort.cpp 
 OBJECTS = $(SOURCES:.cpp=.o)
 
 all: $(SOURCES) pr

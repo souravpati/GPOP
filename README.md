@@ -1,6 +1,7 @@
 # README #
 
-
+###Contributors ### 
+Sourav Pati, Kartik Lakhotia
 
 ### Prerequisites ###
 

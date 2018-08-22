@@ -24,7 +24,7 @@ struct CC_F{
         return label[node];
     }
 
-    inline bool reInit(unsigned int node)
+    inline bool initFunc(unsigned int node)
     {
         return false;
     }
@@ -37,7 +37,7 @@ struct CC_F{
         return cond;
     }  
     
-    inline bool apply(unsigned int node)
+    inline bool filterFunc(unsigned int node)
     {
         return true;
     } 
@@ -62,7 +62,7 @@ int main(int argc, char** argv)
 
     while((G.frontierSize > 0))
     {
-         pcpm<unsigned int>(&G, CC_F(label));
+         scatter_and_gather<unsigned int>(&G, CC_F(label));
          numIter++;
     }
     numIter = 0;
@@ -76,7 +76,7 @@ int main(int argc, char** argv)
 
         while((G.frontierSize > 0))
         {
-            pcpm<unsigned int>(&G, CC_F(label));
+            scatter_and_gather<unsigned int>(&G, CC_F(label));
             numIter++;
         }
 

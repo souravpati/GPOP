@@ -119,7 +119,7 @@ void reInitializeSparseFrontier(graph* G, partitionData* TD, userArg UA)
     unsigned int trueSize = 0;
     for (unsigned int i=0; i<TD->frontierSize; i++)
     {
-        G->inFrontier[TD->frontier[i]] = UA.reInit(TD->frontier[i]);
+        G->inFrontier[TD->frontier[i]] = UA.initFunc(TD->frontier[i]);
         if (G->inFrontier[TD->frontier[i]])
         {
             TD->frontier[trueSize++] = TD->frontier[i];
@@ -138,7 +138,7 @@ void reInitializeDenseFrontier(graph* G, partitionData* TD, userArg UA)
 {
     for (unsigned int i=TD->startVertex; i<TD->endVertex; i++)
     {
-        UA.reInit(i);
+        UA.initFunc(i);
     }
 }
 
@@ -148,7 +148,7 @@ void filterFrontier(graph*G, partitionData* TD, userArg UA)
     unsigned int trueSize = 0;
     for (unsigned int i=0; i<TD->frontierSize; i++)
     {
-        G->inFrontier[TD->frontier[i]] = UA.apply(TD->frontier[i]);
+        G->inFrontier[TD->frontier[i]] = UA.filterFunc(TD->frontier[i]);
         if (G->inFrontier[TD->frontier[i]])
         {
             TD->activeEdges += G->outDeg[TD->frontier[i]];
@@ -419,7 +419,7 @@ void gather(graph* G, partitionData* TD, type*** updateBins, unsigned int*** den
     filterFrontier(G, TD, UA);
 #else
     for (unsigned int i=TD->startVertex; i<TD->endVertex; i++)
-        UA.apply(i);
+        UA.filterFunc(i);
 #endif
 } 
 
