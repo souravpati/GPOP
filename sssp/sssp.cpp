@@ -13,6 +13,10 @@ unsigned int numIter = 0;
 
 #define WEIGHTED
 
+//for asynchronous update propagation//
+//converges faster//
+#define ASYNCH
+
 #include "../include/pcp.h"
 
 
@@ -21,17 +25,17 @@ struct SSSP_F{
     unsigned int* distance;
     SSSP_F(unsigned int* _distance):distance(_distance){}
 
-    inline unsigned int scatterFunc (unsigned int node)
+    inline unsigned int scatterFunc (intV node)
     {
         return distance[node];
     }
 
-    inline bool initFunc(unsigned int node)
+    inline bool initFunc(intV node)
     {
         return false;
     }
 
-    inline bool gatherFunc (unsigned int updateVal, unsigned int destId)
+    inline bool gatherFunc (unsigned int updateVal, intV destId)
     {
         if(updateVal < distance[destId])
         {
@@ -42,7 +46,7 @@ struct SSSP_F{
             return false;
     }  
     
-    inline bool filterFunc(unsigned int node)
+    inline bool filterFunc(intV node)
     {
         return true;
     } 
@@ -62,11 +66,11 @@ int main(int argc, char** argv)
     graph<unsigned int> G;
     initialize(&G, argc, argv);
     initBin<unsigned int>(&G);    
-    unsigned int n = G.numVertex;
+    intV n = G.numVertex;
     unsigned int* distance = new unsigned int [n]();
-    unsigned int initFrontierSize = 1;
-    unsigned int* initFrontier = new unsigned int [initFrontierSize];
-    for (unsigned int i=0; i<initFrontierSize; i++)
+    intV initFrontierSize = 1;
+    intV* initFrontier = new intV [initFrontierSize];
+    for (intV i=0; i<initFrontierSize; i++)
         initFrontier[i] = G.start;  
 
     loadFrontier(&G, initFrontier, initFrontierSize);
@@ -97,6 +101,10 @@ int main(int argc, char** argv)
         ctr++;
     }
     printf("\n");
+
+    FILE* fp = fopen("dump.bin", "wb");
+    fwrite(distance, sizeof(unsigned int), n, fp);
+    fclose(fp);
 
     return 0;
 }

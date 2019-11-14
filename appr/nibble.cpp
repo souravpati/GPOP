@@ -26,24 +26,24 @@ float threshold = 0.000000001;
 struct PR_F{
     float* pageRank;
     float* pageRankScat;
-    unsigned int* deg;
-    PR_F(float* _pcurr, float* _pscat, unsigned int* _outDeg):pageRank(_pcurr), pageRankScat(_pscat), deg(_outDeg){}
-    inline float scatterFunc (unsigned int node)
+    intV* deg;
+    PR_F(float* _pcurr, float* _pscat, intV* _outDeg):pageRank(_pcurr), pageRankScat(_pscat), deg(_outDeg){}
+    inline float scatterFunc (intV node)
     {
         return pageRankScat[node];
     }
-    inline bool initFunc(unsigned int node)
+    inline bool initFunc(intV node)
     {
         pageRank[node]=pageRank[node]/2;
         pageRankScat[node] = 0;
         return (pageRank[node] >= threshold*deg[node]);
     }
-    inline bool gatherFunc (float updateVal, unsigned int destId)
+    inline bool gatherFunc (float updateVal, intV destId)
     {
         pageRank[destId] += updateVal;
         return (updateVal > 0);
     }
-    inline bool filterFunc(unsigned int node)
+    inline bool filterFunc(intV node)
     {
         bool cond = (pageRank[node] >= threshold*deg[node]);
         if (!cond)
@@ -64,16 +64,16 @@ int main(int argc, char** argv)
     initBin<float>(&G);    
     float* pcurr = new float [G.numVertex]();
     float* pscat = new float [G.numVertex]();
-    for (unsigned int i=0; i<G.numVertex; i++)
+    for (intV i=0; i<G.numVertex; i++)
     {
         pcurr[i] = 0;
         pscat[i] = 0;
     }
-    unsigned int initFrontierSize = 1;
-    unsigned int* initFrontier = new unsigned int [initFrontierSize];
-    unsigned int actVertex;
+    intV initFrontierSize = 1;
+    intV* initFrontier = new intV [initFrontierSize];
+    intV actVertex;
  
-    for (unsigned int i=0; i<initFrontierSize; i++)
+    for (intV i=0; i<initFrontierSize; i++)
         initFrontier[i] = G.start;
 
     struct timespec start, end;
@@ -84,7 +84,7 @@ int main(int argc, char** argv)
     {
         resetFrontier(&G);
 
-        for (unsigned int i=0; i<initFrontierSize; i++)
+        for (intV i=0; i<initFrontierSize; i++)
         {
             actVertex = initFrontier[i];
             pcurr[actVertex] = 1;
@@ -104,7 +104,7 @@ int main(int argc, char** argv)
 
         getFrontier(&G);
         #pragma omp parallel for
-        for (unsigned int i=0; i<G.frontierSize; i++)
+        for (intV i=0; i<G.frontierSize; i++)
         {
             pcurr[G.frontier[i]]=0;
             pscat[G.frontier[i]]=0;

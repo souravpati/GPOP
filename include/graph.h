@@ -16,80 +16,82 @@
 #include <omp.h>
 #include <atomic>
 #include <boost/dynamic_bitset.hpp>
-#include "../include/sort.h"
+
+#if defined (HUGE_EDGE) || defined (HUGE_VERTEX)
+typedef unsigned long long int intE;
+#else
+typedef unsigned int intE;
+#endif
+//typedef unsigned long long int intE;
+//typedef unsigned int intV;
+
+#ifdef HUGE_VERTEX
+typedef unsigned long long int intV;
+#else
+typedef unsigned int intV;
+#endif
 
 //////////////////////////////////////////
 //partition centric programming data types
 //////////////////////////////////////////
-
 typedef struct partitionGraph 
 {
-    unsigned int numVertex;
-    unsigned int numEdges;
-    unsigned int* VI;
-    unsigned int* EI;
-    unsigned int* outDeg;
+    intV numVertex;
+    intE numEdges;
+    intE* VI;
+    intV* EI;
+    unsigned int* EW;
+    intV* outDeg;
 } partitionGraph;
 
 typedef struct partitionData
 {
-    unsigned int tid;
-    unsigned int startVertex;
-    unsigned int endVertex;
-    partitionGraph* PNG;
-    unsigned int* frontier;
-    unsigned int frontierSize;
-    bool isDense;
-    unsigned int totalEdges;
-    unsigned int activeEdges;
-    std::atomic<unsigned int> binListPtr;
+    intV tid; //partition ID
+    intV startVertex; 
+    intV endVertex;
+    partitionGraph* PNG; //for dense scatter
+    partitionGraph* IPG; //for intra-partition asynch processing
+    intV* frontier; //active vertex list within the partition
+    intV frontierSize; 
+    bool isDense; //true if partition should be scattered in dense mode
+    intE totalEdges;
+    intE activeEdges;
+    std::atomic<intV> binListPtr; //number of bins with messages to be gathered??
 }partitionData;
 
 template<class type>
 struct graph 
 {
-    unsigned int numBins;
-    unsigned int numVertex;
-    unsigned int numEdges;
-    unsigned int* VI;
-    unsigned int* EI;
-    unsigned int* EW;
-    unsigned int* frontier;
-    unsigned int start;
+    intV numBins; // # partitions
+    intV numVertex;
+    intE numEdges;
+    intE* VI; //vertex offset in CSR
+    intV* EI; //edge array in CSR
+    unsigned int* EW; //edge weights
+    intV* frontier; //
+    intV start; //starting vertex??
     unsigned int rounds;
-//    boost::dynamic_bitset<> inFrontier; 
-    bool* inFrontier;
-    std::atomic<unsigned int> frontierSize;
-    partitionData* TD;
-    unsigned int* outDeg;
-    unsigned int* inDeg;
-    bool* flag;
-    bool** binFlag;
-    unsigned int** updateBinAddrSize;
-    unsigned int** destIdBinAddrSize;
-    unsigned int** updateBinPointers;
-    unsigned int** destIdBinPointers;  
-    unsigned int*** indWeightBins;
-    unsigned int*** indDestIdBins;
-    unsigned int*** sparseDestIdBins;
-    type*** indUpdateBins;   
-    unsigned int* activeScatter;
-    unsigned int* activeGather;
-    std::atomic<unsigned int> partListPtr;
-    unsigned int** activeBins;
+    bool* inFrontier; //array to indicate if a vertex is in frontier
+    std::atomic<intV> frontierSize;
+    partitionData* TD; //array of partitions
+    intV* outDeg;
+    intV* inDeg;
+    bool* scatterDone; // to indicate if a partition is done scattering
+    bool* flag; //to indicate if a partition has a message or not
+    bool** binFlag; //to indicate if a bin has any message or not
+    intE** updateBinAddrSize; //2D array for no. of updates 
+    intE** destIdBinAddrSize; //2D array for no. of dest IDs
+    intE** updateBinPointers; //running address (counters) pointing to next write location
+    intE** destIdBinPointers; 
+    unsigned int*** indWeightBins; //weight bins
+    intV*** indDestIdBins; //dest ID bins (dense, fixed order)
+    intV*** sparseDestIdBins; //sparse dest ID bins (empty, to be filled on scatter)
+    type*** indUpdateBins;   //update bins (same for dense and sparse)
+    intV* activeScatter; //list of partitions with active vertices
+    intV* activeGather; //list of partitions who have received a message
+    std::atomic<intV> partListPtr; //# partitions to be processed (scatter or gather)
+    intV** activeBins; //array of bins with messages
 };
-
-
-//int read_csr (char* filename, graph* G);
-//void write_csr (char* filename, graph* G);
-//void printGraph(graph* G);
-//void transposeCSR(graph* G1);
-//void sortEdges(graph* G);
-//void initGraph (graph* G);
-//void freeMem (graph* G);
-
-
-
 
 
 template<class graph>
@@ -101,13 +103,15 @@ int read_csr (char* filename, graph* G)
         fputs("file error", stderr);
         return -1;
     }
-    fread (&(G->numVertex), sizeof(unsigned int), 1, graphFile);
+    fread (&(G->numVertex), sizeof(intV), 1, graphFile);
+    std::cout << G->numVertex << std::endl;
     
-    fread (&(G->numEdges), sizeof(unsigned int), 1, graphFile);
+    fread (&(G->numEdges), sizeof(intE), 1, graphFile);
+    std::cout << G->numEdges << std::endl;
 
-
-    G->VI = new unsigned int[G->numVertex+1];
-    fread (G->VI, sizeof(unsigned int), G->numVertex, graphFile);
+    G->VI = new intE[G->numVertex+1];
+    fread (G->VI, sizeof(intE), G->numVertex, graphFile);
+    std::cout << "read offsets" << std::endl;
     if (feof(graphFile))
     {
         delete[] G->VI;
@@ -122,8 +126,9 @@ int read_csr (char* filename, graph* G)
     }
     G->VI[G->numVertex] = G->numEdges;
 
-    G->EI = new unsigned int[G->numEdges];
-    fread (G->EI, sizeof(unsigned int), G->numEdges, graphFile);
+    G->EI = new intV[G->numEdges];
+    fread (G->EI, sizeof(intV), G->numEdges, graphFile);
+    std::cout << "read edges" << std::endl;
     if (feof(graphFile))
     {
         delete[] G->EI;
@@ -158,6 +163,7 @@ int read_csr (char* filename, graph* G)
         printf("error reading file\n");
         return -1;
     }
+    std::cout << "read weights" << std::endl;
 #endif
 
     fclose(graphFile);
@@ -174,10 +180,10 @@ void write_csr (char* filename, graph* G)
         fputs("file error", stderr);
         return;
     }
-    fwrite(&G->numVertex, sizeof(unsigned int), 1, fp); 
-    fwrite(&G->numEdges, sizeof(unsigned int), 1, fp); 
-    fwrite(G->VI, sizeof(unsigned int), G->numVertex, fp); 
-    fwrite(G->EI, sizeof(unsigned int), G->numEdges, fp); 
+    fwrite(&G->numVertex, sizeof(intV), 1, fp); 
+    fwrite(&G->numEdges, sizeof(intE), 1, fp); 
+    fwrite(G->VI, sizeof(intE), G->numVertex, fp); 
+    fwrite(G->EI, sizeof(intV), G->numEdges, fp); 
     fclose(fp); 
 }
 
@@ -185,9 +191,9 @@ template<class graph>
 void printGraph(graph* G)
 {
     printf("num vertices = %d\n numEdges = %d\n", G->numVertex, G->numEdges);
-    for (unsigned int i=0; i<=G->numVertex; i++)
+    for (intV i=0; i<=G->numVertex; i++)
     {
-        for (unsigned int j=G->VI[i]; j<G->VI[i+1]; j++)
+        for (intE j=G->VI[i]; j<G->VI[i+1]; j++)
             printf("%d, %d\n", i, G->EI[j]);
     }
 }
@@ -195,20 +201,20 @@ void printGraph(graph* G)
 template<class graph>
 void transposeCSR(graph* G1)
 {
-    unsigned int* newVI = new unsigned int[G1->numVertex+1]();
-    unsigned int* newEI = new unsigned int[G1->numEdges]; 
+    intE* newVI = new intE[G1->numVertex+1]();
+    intV* newEI = new intV[G1->numEdges]; 
 
-    for (unsigned int i=0; i<G1->numEdges; i++)
+    for (intE i=0; i<G1->numEdges; i++)
     {
         newVI[G1->EI[i]+1]++;
     }
-    for (unsigned int i=0; i<G1->numVertex; i++)
+    for (intV i=0; i<G1->numVertex; i++)
         newVI[i+1] += newVI[i];
 
-    unsigned int* tempId = new unsigned int [G1->numVertex]();
-    for (unsigned int i=0; i<G1->numVertex; i++)
+    intV* tempId = new intV [G1->numVertex]();
+    for (intV i=0; i<G1->numVertex; i++)
     {
-        for (unsigned int j=G1->VI[i]; j<G1->VI[i+1]; j++)
+        for (intE j=G1->VI[i]; j<G1->VI[i+1]; j++)
         {
             newEI[newVI[G1->EI[j]] + tempId[G1->EI[j]]] = i;
             tempId[G1->EI[j]]++;
@@ -221,26 +227,16 @@ void transposeCSR(graph* G1)
     G1->EI = newEI;
 }
 
-template<class graph>
-void sortEdges(graph* G)
-{
-    #pragma omp parallel for
-    for (unsigned int i=0; i<G->numVertex; i++)
-    {
-        if (G->VI[i+1] > (G->VI[i]+1))
-            mergeSortWOkey<unsigned int>(G->EI, G->VI[i], G->VI[i+1]-1);
-    }
-    return;
-}
 
 template<class graph>
 void findOutDeg(graph* G)
 {
-    #pragma omp parallel for
-    for (unsigned int i=0; i<G->numVertex; i++)
+    #pragma omp parallel for 
+    for (intV i=0; i<G->numVertex; i++)
     {
-        G->outDeg[i] = G->VI[i+1] - G->VI[i];
-        for (unsigned int j=G->VI[i]; j<G->VI[i+1]; j++)
+        intE outDeg = G->VI[i+1] - G->VI[i];
+        G->outDeg[i] = outDeg;
+        for (intE j=G->VI[i]; j<G->VI[i+1]; j++)
         {
             #pragma omp atomic
             G->inDeg[G->EI[j]]++;
@@ -253,12 +249,13 @@ template<class graph>
 void initGraph (graph* G)
 {
     G->inFrontier = new bool [G->numVertex](); 
-    G->outDeg = new unsigned int [G->numVertex]();
-    G->inDeg = new unsigned int [G->numVertex]();
+    G->outDeg = new intV [G->numVertex]();
+    G->inDeg = new intV [G->numVertex]();
     findOutDeg(G);
     G->frontierSize = 0;
-    G->frontier = new unsigned int [G->numVertex]; 
+    G->frontier = new intV [G->numVertex]; 
     G->flag = new bool [G->numBins]();
+    G->scatterDone = new bool [G->numBins]();
     return;
 }
 
@@ -290,7 +287,7 @@ void freeMem (graph* G)
 }
 
 template<class graph>
-unsigned int findFrontierSize(graph* G)
+intV findFrontierSize(graph* G)
 {
     return G->frontierSize.load();
 }

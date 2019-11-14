@@ -1,10 +1,19 @@
+#HUGE_EDGE=1
+#HUGE_VERTEX=1
+
+ifdef HUGE_EDGE
+INTE = -DHUGE_EDGE
+endif
+
+ifdef HUGE_VERTEX
+INTV = -DHUGE_VERTEX
+endif
+
+
 CC      = g++
-#PCM_PATH = /home/klakhoti/graphChallenge/pcm
-#CPPFLAGS= -O3 -c -std=c++11 -fopenmp -mavx -I /home/klakhoti/graphChallenge/pcm/ -w 
-#LDFLAGS = -fopenmp -m64 -lpthread -L ../../../pcm/cpucounters.o ../../../pcm/pci.o ../../../pcm/msr.o ../../../pcm/client_bw.o ../../../pcm/cpucounters.o 
-CPPFLAGS= -O3 -c -std=c++11 -fopenmp -mavx -w 
+CPPFLAGS= -O3 -c -std=c++11 -fopenmp -mavx -w $(INTE) $(INTV)
 LDFLAGS = -fopenmp -m64 -lpthread 
-SOURCES = sssp.cpp ../src/sort.cpp
+SOURCES = sssp.cpp 
 OBJECTS = $(SOURCES:.cpp=.o)
 
 all: $(SOURCES) sssp

@@ -14,41 +14,40 @@ unsigned int numIter = 0;
 
 #include "../include/pcp.h"
 
-#define MAX_NEG 0x80000000
 
 
 struct BFS_F{
-    unsigned int* parent;
+    intV* parent;
     bool* visited;
-    BFS_F(unsigned int* _parent, bool* _visited):parent(_parent), visited(_visited){}
-    inline unsigned int scatterFunc (unsigned int node)
+    BFS_F(intV* _parent, bool* _visited):parent(_parent), visited(_visited){}
+    inline intV scatterFunc (intV node)
     {
-        return (((!visited[node])<<31) | node);
+        return (((!visited[node])<<MSB_ROT) | node);
     }
 
-    inline bool initFunc(unsigned int node)
+    inline bool initFunc(intV node)
     {
         return false;
     }
 
-    inline bool gatherFunc (unsigned int updateVal, unsigned int destId)
+    inline bool gatherFunc (intV updateVal, intV destId)
     {
-//        if((!visited[destId]) && (!(updateVal>>31)))
+//        if((!visited[destId]) && (!(updateVal>>MSB_ROT)))
 //        {
 //            parent[destId] = updateVal;
 //            visited[destId] = true;
 //            return true;
 //        }
-        if (!visited[destId])
+        if (!visited[destId]) //if destination vertex is not yet visited
         {
-            parent[destId] = updateVal;
-            visited[destId] = (!(updateVal>>31));
-            return visited[destId];
+            parent[destId] = updateVal; //set its parent
+            visited[destId] = (!(updateVal>>MSB_ROT)); //new visited status depends on parent's status
+            return visited[destId]; //active if it is now visited
         }
         return false;
     }  
     
-    inline bool filterFunc(unsigned int node)
+    inline bool filterFunc(intV node)
     {
         return true;
     } 
@@ -56,29 +55,29 @@ struct BFS_F{
 };
 
 struct BFS_F2{
-    unsigned int* parent;
-    BFS_F2(unsigned int* _parent):parent(_parent){}
-    inline unsigned int scatterFunc (unsigned int node)
+    intV* parent;
+    BFS_F2(intV* _parent):parent(_parent){}
+    inline intV scatterFunc (intV node)
     {
         return ((parent[node] & MAX_NEG)| node);
     }
 
-    inline bool initFunc(unsigned int node)
+    inline bool initFunc(intV node)
     {
         return false;
     }
 
-    inline bool gatherFunc (unsigned int updateVal, unsigned int destId)
+    inline bool gatherFunc (intV updateVal, intV destId)
     {
-        if((parent[destId] & MAX_NEG) && (!(updateVal>>31)))
+        if((parent[destId] & MAX_NEG) && (!(updateVal>>MSB_ROT))) //if parent of destID is negative and received update from a visited node
         {
-            parent[destId] = updateVal;
+            parent[destId] = updateVal; //update parent
             return true;
         }
         return false;
     }  
     
-    inline bool filterFunc(unsigned int node)
+    inline bool filterFunc(intV node)
     {
         return true;
     } 
@@ -90,15 +89,15 @@ struct BFS_F2{
 
 int main(int argc, char** argv)
 {
-    graph<unsigned int> G;
+    graph<intV> G;
     initialize(&G, argc, argv);
-    initBin<unsigned int>(&G);    
-    unsigned int n = G.numVertex;
-    unsigned int* parent = new unsigned int [n]();
+    initBin<intV>(&G);    
+    intV n = G.numVertex;
+    intV* parent = new intV [n]();
     bool* visited = new bool [n]();
-    unsigned int initFrontierSize = 1;
-    unsigned int* initFrontier = new unsigned int [initFrontierSize];
-    for (unsigned int i=0; i<initFrontierSize; i++)
+    intV initFrontierSize = 1;
+    intV* initFrontier = new intV [initFrontierSize];
+    for (intV i=0; i<initFrontierSize; i++)
         initFrontier[i] = G.start;  
 
 	struct timespec start, end;
@@ -109,7 +108,7 @@ int main(int argc, char** argv)
    
         for(int i=0;i<n;i++)
         {
-            parent[i] = 1<<31;
+            parent[i] = 1<<MSB_ROT;
             visited[i] = false;
         }
         visited[G.start] = true;
@@ -123,8 +122,7 @@ int main(int argc, char** argv)
         numIter=0;
         while((G.frontierSize > 0))
         {
-            scatter_and_gather<unsigned int>(&G, BFS_F(parent, visited));
-//            pcpm<unsigned int>(&G, BFS_F2(parent));
+            scatter_and_gather<intV>(&G, BFS_F(parent, visited));
             numIter++;
          }   
 
