@@ -24,10 +24,6 @@ cd bfs
 make
 ```
 
-To clear all the object files
-```
-make clean
-```
 
 ### Data Types ###
 For the following identifiers, use the inbuilt datatypes
