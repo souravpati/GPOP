@@ -11,25 +11,29 @@
 
 unsigned int numIter = 0;
 
+//for asynchronous update propagation//
+//converges faster//
+#define ASYNCH
+
 #include "../include/pcp.h"
 
 
 
 struct CC_F{
-    unsigned int* label;
-    CC_F(unsigned int* _label):label(_label){}
+    intV* label;
+    CC_F(intV* _label):label(_label){}
 
-    inline unsigned int scatterFunc (unsigned int node)
+    inline intV scatterFunc (intV node)
     {
         return label[node];
     }
 
-    inline bool initFunc(unsigned int node)
+    inline bool initFunc(intV node)
     {
         return false;
     }
 
-    inline bool gatherFunc (unsigned int updateVal, unsigned int destId)
+    inline bool gatherFunc (intV updateVal, intV destId)
     {
         bool cond = (updateVal < label[destId]);
         if (cond)
@@ -37,7 +41,7 @@ struct CC_F{
         return cond;
     }  
     
-    inline bool filterFunc(unsigned int node)
+    inline bool filterFunc(intV node)
     {
         return true;
     } 
@@ -47,14 +51,14 @@ struct CC_F{
 
 int main(int argc, char** argv)
 {
-    graph<unsigned int> G;
+    graph<intV> G;
     initialize(&G, argc, argv);
-    initBin<unsigned int>(&G);
-    unsigned int n = G.numVertex;
-    unsigned int* label = new unsigned int [n]();
-    unsigned int initFrontierSize = n;
-    unsigned int* initFrontier = new unsigned int [initFrontierSize];
-    for (unsigned int i=0; i<initFrontierSize; i++)
+    initBin<intV>(&G);
+    intV n = G.numVertex;
+    intV* label = new intV [n]();
+    intV initFrontierSize = n;
+    intV* initFrontier = new intV [initFrontierSize];
+    for (intV i=0; i<initFrontierSize; i++)
         initFrontier[i] = i;
 
     struct timespec start, end, half;
@@ -62,7 +66,7 @@ int main(int argc, char** argv)
 
     while((G.frontierSize > 0))
     {
-         scatter_and_gather<unsigned int>(&G, CC_F(label));
+         scatter_and_gather<intV>(&G, CC_F(label));
          numIter++;
     }
     numIter = 0;
@@ -76,7 +80,7 @@ int main(int argc, char** argv)
 
         while((G.frontierSize > 0))
         {
-            scatter_and_gather<unsigned int>(&G, CC_F(label));
+            scatter_and_gather<intV>(&G, CC_F(label));
             numIter++;
         }
 
@@ -86,6 +90,7 @@ int main(int argc, char** argv)
         ctr++;
     }
     printf("\n");
+
 
     return 0;
 }

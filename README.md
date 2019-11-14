@@ -12,9 +12,8 @@ g++ --version >= 4.7
 ### Compilation ###
 
 This directory contains
-1. src/ directory - source code
-2. include/ directory - header files
-3. application directories
+1. include/ directory - header files
+2. application directories
 
 Makefile for each algorithm is present in its respective directory.  
 For example:  
@@ -30,6 +29,15 @@ To clear all the object files
 make clean
 ```
 
+### Data Types ###
+For the following identifiers, use the inbuilt datatypes
+1. vertex ID: use "intV"
+2. edge ID: use "intE"
+
+### Processing Large Graphs ###
+Enable the following flags in makefile(s):
+1. HUGE\_EDGE: if number of edges is >4B
+2. HUGE\_VERTEX: if number of vertices is >2B 
 
 ### Running the tests ###
 Check the README inside each application folder

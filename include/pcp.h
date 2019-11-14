@@ -21,25 +21,26 @@
 #include <omp.h>
 #include <assert.h>
 #include <string.h>
-//#include "/home/klakhoti/graphChallenge/pcm/cpucounters.h"
 #include <immintrin.h>
-//#include "../include/graph.h"
-//#include "../include/sort.h"
-//#include "../include/partition.h"
-
-unsigned int binWidth = (256*1024)/sizeof(float); //512kB
-unsigned int binOffsetBits = (unsigned int)std::log2((float)binWidth); 
-unsigned int NUM_BINS = 10000000/binWidth;
-
 #include "../include/gas.h"
 
+intV binWidth = (256*1024)/sizeof(float); //512kB
+unsigned int binOffsetBits = (unsigned int)std::log2((double)binWidth); 
+intV NUM_BINS = 10000000/binWidth;
 
 
-unsigned int edgesPerIteration;
+
+
 
 
 #define DEBUG
 #undef DEBUG
+
+//////////////////////////////////////////
+// performance monitoring via PCM
+//////////////////////////////////////////
+#define PERF_MON
+#undef PERF_MON
 
 
 //////////////////////////////////////////
@@ -48,18 +49,12 @@ unsigned int edgesPerIteration;
 #define DEBUGL2
 #undef DEBUGL2
 
-//////////////////////////////////////////
-// performance monitoring via PCM
-//////////////////////////////////////////
-#define PERF_MON
-#undef PERF_MON
 
 #define ITERTIME
 #undef ITERTIME
 
 int NUM_THREADS = std::max(atoi(std::getenv("OMP_NUM_THREADS")), 1);
-int MAX_THREADS = 36;
-int MAX_ITER = 1000000;
+unsigned int MAX_ITER = 1000000;
 
 
 
@@ -74,7 +69,7 @@ void initialize(graph* G, int argc, char** argv)
         {
             if (strcmp(argv[i], "-s") == 0) // This is your parameter name
             {                 
-                G->start = (unsigned int)atoi(argv[i + 1]);    // The next value in the array is your value
+                G->start = (intV)atoi(argv[i + 1]);    // The next value in the array is your value
                 i++;    // Move to the next flag
             }
             if (strcmp(argv[i], "-t") == 0) // This is your parameter name
@@ -94,11 +89,6 @@ void initialize(graph* G, int argc, char** argv)
             }
         }
     }
-//    cout<<G->start<<" "<<NUM_THREADS<<" "<<MAX_ITER<<" "<<G->rounds<<endl;
-//    if (argc >= 3)
-//        NUM_THREADS = (unsigned int)atoi(argv[2]);
-//    if (argc >= 4)
-//        MAX_ITER = (unsigned int)atoi(argv[3]);
     if (argc < 2)
     {
         printf("Usage : %s <filename> -s <start node> -t <numThreads(optional)> -iter <#iterations(optional) -rounds <#rounds(default 3)> \n", argv[0]);
@@ -106,7 +96,6 @@ void initialize(graph* G, int argc, char** argv)
     }
 
     omp_set_num_threads(NUM_THREADS);
-//    printf("omp_get_num_threads(): %d\n",omp_get_max_threads());
 
     //////////////////////////////////////////
     // read csr file
@@ -117,22 +106,18 @@ void initialize(graph* G, int argc, char** argv)
         exit(1);
     }
     
-    unsigned int numVerticesPerBin= (G->numVertex/(NUM_THREADS*4));
+    intV numVerticesPerBin= (G->numVertex/(NUM_THREADS*4));
     numVerticesPerBin = (numVerticesPerBin < binWidth) ? numVerticesPerBin : binWidth;
-    unsigned int pow2=1;
+    intV pow2=1;
     while(pow2<=numVerticesPerBin)
-    {
-//        if(pow2>numVerticesPerBin)
-//            break;
         pow2*=2;
-    }
     pow2/=2;
     if(pow2==0) binWidth=4;
     else binWidth = pow2;
     NUM_BINS = (G->numVertex-1)/binWidth + 1;
     G->numBins = NUM_BINS;
     printf("number of partitions %d, size of partitions %d\n", NUM_BINS, binWidth);
-    binOffsetBits = (unsigned int)std::log2((float)binWidth);
+    binOffsetBits = (unsigned int)std::log2((double)binWidth);
     //////////////////////////////////////////
     //initialize graph frontier, degree etc.//
     //////////////////////////////////////////
@@ -162,10 +147,10 @@ void initBin(graph* G)
     //1 column -> 1 gather bin; 1 row -> 1 scatter bin
     //bin[i][j] -> stores what i sends to j
     //////////////////////////////////////////////////
-    G->updateBinAddrSize = allocateBinMat<unsigned int>(NUM_BINS, NUM_BINS);
-    G->destIdBinAddrSize = allocateBinMat<unsigned int>(NUM_BINS, NUM_BINS);
+    G->updateBinAddrSize = allocateBinMat<intE>(NUM_BINS, NUM_BINS);
+    G->destIdBinAddrSize = allocateBinMat<intE>(NUM_BINS, NUM_BINS);
     G->binFlag = allocateBinMat<bool>(NUM_BINS, NUM_BINS);
-    G->activeBins = allocateBinMat<unsigned int>(NUM_BINS, NUM_BINS);
+    G->activeBins = allocateBinMat<intV>(NUM_BINS, NUM_BINS);
 
 //    struct timespec preStart, preEnd; 
 //    float preTime;
@@ -174,9 +159,12 @@ void initBin(graph* G)
     //////////////////////////////////////////
     //// transpose and compute offsets ///////
     //////////////////////////////////////////
-    #pragma omp parallel for
-    for (unsigned int i=0; i<NUM_BINS; i++)
+    #pragma omp parallel for schedule (dynamic, 1)
+    for (intV i=0; i<NUM_BINS; i++)
         transposePartition(G, &(G->TD[i]), G->updateBinAddrSize[i], G->destIdBinAddrSize[i]);
+
+    printf("PNG construction successful\n");
+
 
 
 //    if( clock_gettime( CLOCK_REALTIME, &preEnd) == -1 ) { perror("clock gettime");}      
@@ -191,19 +179,19 @@ void initBin(graph* G)
     ////individual bins to->fro each partition //////
     //////////////////////////////////////////
     G->indUpdateBins = allocateBinMatPtr<type>(NUM_BINS, NUM_BINS);
-    G->indDestIdBins = allocateBinMatPtr<unsigned int>(NUM_BINS, NUM_BINS);
-    G->sparseDestIdBins = allocateBinMatPtr<unsigned int>(NUM_BINS, NUM_BINS);
+    G->indDestIdBins = allocateBinMatPtr<intV>(NUM_BINS, NUM_BINS);
+    G->sparseDestIdBins = allocateBinMatPtr<intV>(NUM_BINS, NUM_BINS);
 #ifdef WEIGHTED
     G->indWeightBins = allocateBinMatPtr<unsigned int>(NUM_BINS, NUM_BINS);
 #endif
-    #pragma omp parallel for
-    for (unsigned int i=0; i<NUM_BINS; i++)
+    #pragma omp parallel for num_threads(NUM_THREADS) schedule(dynamic, 1)
+    for (intV i=0; i<NUM_BINS; i++)
     {
-        for (unsigned int j=0; j<NUM_BINS; j++)
+        for (intV j=0; j<NUM_BINS; j++)
         {
             G->indUpdateBins[i][j] = new type [G->destIdBinAddrSize[i][j]];
-            G->indDestIdBins[i][j] = new unsigned int [G->destIdBinAddrSize[i][j]];
-            G->sparseDestIdBins[i][j] = new unsigned int [G->destIdBinAddrSize[i][j]];
+            G->indDestIdBins[i][j] = new intV [G->destIdBinAddrSize[i][j]];
+            G->sparseDestIdBins[i][j] = new intV [G->destIdBinAddrSize[i][j]];
 #ifdef WEIGHTED
             G->indWeightBins[i][j] = new unsigned int [G->destIdBinAddrSize[i][j]];
 #endif
@@ -211,12 +199,12 @@ void initBin(graph* G)
     }
 
     //pointers for each (i,j) bin for later use //
-    G->updateBinPointers = allocateBinMat<unsigned int>(NUM_BINS, NUM_BINS);
-    G->destIdBinPointers = allocateBinMat<unsigned int>(NUM_BINS, NUM_BINS);
+    G->updateBinPointers = allocateBinMat<intE>(NUM_BINS, NUM_BINS);
+    G->destIdBinPointers = allocateBinMat<intE>(NUM_BINS, NUM_BINS);
 
 
-    #pragma omp parallel for
-    for (unsigned int i=0; i<NUM_BINS; i++)
+    #pragma omp parallel for num_threads(NUM_THREADS) schedule (dynamic, 1)
+    for (intV i=0; i<NUM_BINS; i++)
     {
 #ifdef WEIGHTED
         writeDestIds(G, &G->TD[i], G->indDestIdBins[i], G->indWeightBins[i], G->destIdBinPointers[i]);
@@ -248,7 +236,7 @@ void scatter_and_gather(graph* G, userArg UA)
     float iterTime;
     if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
 #endif
-    unsigned int numActiveBins;
+    intV numActiveBins;
 ///////////////////////////////////////
 ////Set FLAG For Scatter and Gather////
 ///////////////////////////////////////
@@ -258,14 +246,13 @@ void scatter_and_gather(graph* G, userArg UA)
         G->frontierSize = 0;
 #endif
 //    printf("\n"); 
-//	for(unsigned int i=0;i<NUM_BINS; i++)
+//	for(intV i=0;i<NUM_BINS; i++)
 //    {
-//        for (unsigned int j=0; j<G->TD[i].frontierSize; j++)
+//        for (intV j=0; j<G->TD[i].frontierSize; j++)
 //            printf("%d, ", G->TD[i].frontier[j]);
 //    }
 //    printf("\n"); 
 #ifdef ITERTIME
-    	edgesPerIteration =0;
     	if( clock_gettime(CLOCK_REALTIME, &scatterStart) == -1) { perror("clock gettime");}
 #endif
 
@@ -273,17 +260,27 @@ void scatter_and_gather(graph* G, userArg UA)
 
 #ifndef DENSE
         G->partListPtr = 0;
-        #pragma omp parallel for num_threads(NUM_THREADS)
-        for (unsigned int i=0; i<numActiveBins; i++)
+#ifndef ASYNCH
+        #pragma omp parallel for num_threads(NUM_THREADS) schedule (dynamic, 1)
+        for (intV i=0; i<numActiveBins; i++)
             densityCheck(&G->TD[G->activeScatter[i]]);
 #endif
+#endif
 
-        #pragma omp parallel for schedule(dynamic) num_threads(NUM_THREADS)
-        for (unsigned int ptr=0; ptr<numActiveBins; ptr++)
+        #pragma omp parallel for schedule(dynamic,1) num_threads(NUM_THREADS)
+        for (intV ptr=0; ptr<numActiveBins; ptr++)
         {
-            unsigned int i = G->activeScatter[ptr];
+            intV i = G->activeScatter[ptr];
+#ifdef ASYNCH
+            sgMix(G, &G->TD[i], G->indUpdateBins, G->indDestIdBins, G->sparseDestIdBins, G->TD, G->destIdBinAddrSize, G->destIdBinPointers, G->updateBinPointers, G->scatterDone, UA);
+#else
             scatter<type>(G, &G->TD[i], G->indUpdateBins[i], G->sparseDestIdBins[i], G->updateBinPointers[i], G->destIdBinPointers[i], UA);
+#endif
         }
+        
+        #pragma omp parallel for
+        for (intV ptr=0; ptr<numActiveBins; ptr++)
+            G->scatterDone[G->activeScatter[ptr]] = false; //reset scatter done status of partitions
 
 #ifdef ITERTIME
 
@@ -294,11 +291,10 @@ void scatter_and_gather(graph* G, userArg UA)
 
      	if( clock_gettime(CLOCK_REALTIME, &gatherStart) == -1) { perror("clock gettime");}
 #endif   
-//        printf("%d\n", G->partListPtr.load());
-        #pragma omp parallel for schedule(dynamic) num_threads(NUM_THREADS)
-        for (unsigned int ptr=0; ptr<G->partListPtr; ptr++)
+        #pragma omp parallel for schedule(dynamic,1) num_threads(NUM_THREADS)
+        for (intV ptr=0; ptr<G->partListPtr; ptr++)
         {
-            unsigned int i=G->activeGather[ptr];
+            intV i=G->activeGather[ptr];
             gather<type>(G, &G->TD[i], G->indUpdateBins, G->indDestIdBins, G->sparseDestIdBins, G->TD, G->destIdBinAddrSize, G->destIdBinPointers, G->updateBinPointers, UA);
             G->activeScatter[ptr] = i;
         }
@@ -307,8 +303,6 @@ void scatter_and_gather(graph* G, userArg UA)
     	gatherTime += (gatherEnd.tv_sec - gatherStart.tv_sec) + (float)(gatherEnd.tv_nsec - gatherStart.tv_nsec)/1e9; 
 #endif
 
-//	for(unsigned int i=0;i<NUM_BINS; i++)
-//	    edgesPerIteration += G->TD[i].activeEdges;
 #ifdef ITERTIME
 
         if( clock_gettime(CLOCK_REALTIME, &iterEnd) == -1) { perror("clock gettime");}
@@ -323,15 +317,15 @@ void scatter_and_gather(graph* G, userArg UA)
     // free allocated memory//
 //    freeMem(&G);
 //    free(TD);
-//    freeMat<unsigned int>(updateBinAddrSize, NUM_BINS+1);
-//    freeMat<unsigned int>(destIdBinAddrSize, NUM_BINS+1);
-//    freeMat<unsigned int>(updateBinPointers, NUM_BINS);
-//    freeMat<unsigned int>(destIdBinPointers, NUM_BINS);
+//    freeMat<intE>(updateBinAddrSize, NUM_BINS+1);
+//    freeMat<intE>(destIdBinAddrSize, NUM_BINS+1);
+//    freeMat<intE>(updateBinPointers, NUM_BINS);
+//    freeMat<intE>(destIdBinPointers, NUM_BINS);
 //    freeMatPtr<type>(indUpdateBins, NUM_BINS,NUM_BINS);
-//    freeMatPtr<unsigned int>(indDestIdBins, NUM_BINS,NUM_BINS);
-#ifdef WEIGHTED
+//    freeMatPtr<intV>(indDestIdBins, NUM_BINS,NUM_BINS);
+//#ifdef WEIGHTED
 //    freeMatPtr<unsigned int>(indWeightBins, NUM_BINS, NUM_BINS);
-#endif
+//#endif
     
 }
 

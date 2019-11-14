@@ -17,17 +17,33 @@
 #include <math.h>
 #include "../include/graph.h"
 
+//#define MAX_UINT 0xffffffffffffffff
+#if defined (HUGE_EDGE) || defined (HUGE_VERTEX)
+#define MAX_UINT 0xffffffffffffffff
+#else
+#define MAX_UINT 0xffffffff
+#endif
+
+//#define MAX_NEG 0x80000000
+//#define MAX_POS 0x7fffffff
+//#define MSB_ROT 31
+#ifdef HUGE_VERTEX
+#define MAX_NEG 0x8000000000000000
+#define MAX_POS 0x7fffffffffffffff
+#define MSB_ROT 63
+#else
 #define MAX_NEG 0x80000000
 #define MAX_POS 0x7fffffff
-#define MAX_UINT 0xffffffff
+#define MSB_ROT 31
+#endif
 
 
 //////////////////////////////////////////
 //partition centric programming variables
 //////////////////////////////////////////
-extern unsigned int binWidth;
+extern intV binWidth;
 extern unsigned int binOffsetBits; 
-extern unsigned int NUM_BINS;
+extern intV NUM_BINS;
 
 
 //////////////////////////////////////////
@@ -38,21 +54,21 @@ extern unsigned int NUM_BINS;
 template<class graph>
 void partition(partitionData* TD, graph* G)
 {
-    unsigned int numVertexPerBin = binWidth;
-    int vcount = 0;
-    G->activeScatter = new unsigned int [G->numBins]();
-    G->activeGather = new unsigned int [G->numBins]();
+    intV numVertexPerBin = binWidth;
+    G->activeScatter = new intV [G->numBins]();
+    G->activeGather = new intV [G->numBins]();
     G->partListPtr = 0;
     #pragma omp parallel for
-    for (int i=0; i<G->numBins; i++)
+    for (intV i=0; i<G->numBins; i++)
     {
         TD[i].tid = i;
         TD[i].PNG = NULL;
+        TD[i].IPG = NULL; //for asynch processing
         TD[i].isDense = false;
         TD[i].startVertex = i*numVertexPerBin;
         TD[i].endVertex = (i+1)*numVertexPerBin;
         TD[i].endVertex = (TD[i].endVertex > G->numVertex) ? G->numVertex : TD[i].endVertex;
-        TD[i].frontier = new unsigned int [TD[i].endVertex - TD[i].startVertex];
+        TD[i].frontier = new intV [TD[i].endVertex - TD[i].startVertex];
         TD[i].frontierSize = 0;
         TD[i].activeEdges = 0;
         TD[i].totalEdges = G->VI[TD[i].endVertex] - G->VI[TD[i].startVertex];
@@ -69,19 +85,25 @@ void partition(partitionData* TD, graph* G)
 
 //transpose the graph to sort on destination
 template<class graph>
-void transposePartition(graph* G, partitionData* TD, unsigned int* updateBinAddrOffset, unsigned int* destIdBinAddrOffset)
+void transposePartition(graph* G, partitionData* TD, intE* updateBinAddrOffset, intE* destIdBinAddrOffset)
 {
 //    graph* G = TD->G;
     partitionGraph* GSort = new partitionGraph [1];
-    unsigned int currBin, prevBin;
+    intV currBin, prevBin;
 
     GSort->numVertex = G->numBins;
-    GSort->VI = new unsigned int [GSort->numVertex+1]();
+    GSort->VI = new intE [GSort->numVertex+1]();
 
-    for (unsigned int i=TD->startVertex; i<TD->endVertex; i++)
+    //for intra partition asynch processing
+    partitionGraph* IGSort = new partitionGraph [1]; 
+    IGSort->numVertex = TD->endVertex - TD->startVertex;
+    IGSort->VI = new intE [IGSort->numVertex+1]();
+
+    for (intV i=TD->startVertex; i<TD->endVertex; i++)
     {
         prevBin = G->numBins+1;
-        for (unsigned int j=G->VI[i]; j<G->VI[i+1]; j++)
+        intV intraPartId = i - TD->startVertex;
+        for (intE j=G->VI[i]; j<G->VI[i+1]; j++)
         {
             currBin = (G->EI[j] >> binOffsetBits);
             destIdBinAddrOffset[currBin]++;
@@ -89,34 +111,54 @@ void transposePartition(graph* G, partitionData* TD, unsigned int* updateBinAddr
                 continue;
             GSort->VI[currBin+1]++;
             prevBin = currBin;
+            IGSort->VI[intraPartId+1] += (currBin == TD->tid); //for intra partition asynch processing
         }
     }
 
-    for (unsigned int i=0; i<G->numBins; i++)
+    for (intV i=0; i<G->numBins; i++)
         updateBinAddrOffset[i] = GSort->VI[i+1];
 
-    for (unsigned int i=0; i<GSort->numVertex; i++)
+    for (intV i=0; i<GSort->numVertex; i++)
         GSort->VI[i+1] += GSort->VI[i];
 
     GSort->numEdges = GSort->VI[GSort->numVertex];
-    GSort->EI = new unsigned int [GSort->numEdges];
+    GSort->EI = new intV [GSort->numEdges];
+    intE* binOffset = new intE [G->numBins]();
 
-    unsigned int* binOffset = new unsigned int [G->numBins]();
-    for (unsigned int i=TD->startVertex; i<TD->endVertex; i++)
+    //for intra partition asynch processing
+    for (intV i=0; i<IGSort->numVertex; i++)
+        IGSort->VI[i+1] += IGSort->VI[i];
+    IGSort->numEdges = IGSort->VI[IGSort->numVertex];
+    IGSort->EI = new intV [IGSort->numEdges];  
+#ifdef WEIGHTED
+    IGSort->EW = new intV [IGSort->numEdges]; 
+#endif
+    intE IGoffset = 0;
+
+    for (intV i=TD->startVertex; i<TD->endVertex; i++)
     {
         prevBin = G->numBins;
-        for (unsigned int j=G->VI[i]; j<G->VI[i+1]; j++)
+        for (intE j=G->VI[i]; j<G->VI[i+1]; j++)
         {
             currBin = (G->EI[j] >> binOffsetBits);
             if (currBin == prevBin)
                 continue; 
-            
             GSort->EI[GSort->VI[currBin] + (binOffset[currBin]++)] = i;
+
+            if (currBin == TD->tid) //for intra partition asynch processing
+            {   
+#ifdef WEIGHTED
+                IGSort->EW[IGoffset] = G->EW[j];
+#endif
+                IGSort->EI[IGoffset++] = G->EI[j];
+            }
+
             prevBin = currBin;
         }
     }
     
     TD->PNG = GSort;
+    TD->IPG = IGSort; //for intra partition asynch processing
 
 
     delete[] binOffset;
@@ -125,22 +167,22 @@ void transposePartition(graph* G, partitionData* TD, unsigned int* updateBinAddr
 
 template<class graph>
 #ifdef WEIGHTED
-void writeDestIds(graph* G, partitionData* TD, unsigned int** destIdBins, unsigned int** weightBins, unsigned int* destIdBinPointers)
+void writeDestIds(graph* G, partitionData* TD, intV** destIdBins, unsigned int** weightBins, intE* destIdBinPointers)
 #else
-void writeDestIds(graph* G, partitionData* TD, unsigned int** destIdBins, unsigned int* destIdBinPointers)
+void writeDestIds(graph* G, partitionData* TD, intV** destIdBins, intE* destIdBinPointers)
 #endif
 {
-    unsigned int destId = 0;
-    unsigned int destBin = 0;
-    unsigned int prevBin = 0;
+    intV destId = 0;
+    intV destBin = 0;
+    intV prevBin = 0;
 #ifdef DEBUGL2
-    for (unsigned int i=0; i<G->numBins; i++)
+    for (intV i=0; i<G->numBins; i++)
         assert(destIdBinPointers[i] == 0);
 #endif
-    for (unsigned int i=TD->startVertex; i<TD->endVertex; i++)
+    for (intV i=TD->startVertex; i<TD->endVertex; i++)
     {
         prevBin = G->numBins;
-        for (unsigned int j=G->VI[i]; j<G->VI[i+1]; j++)
+        for (intE j=G->VI[i]; j<G->VI[i+1]; j++)
         {
             destId = G->EI[j];
             destBin = (destId >> binOffsetBits);
@@ -155,7 +197,7 @@ void writeDestIds(graph* G, partitionData* TD, unsigned int** destIdBins, unsign
             destIdBins[destBin][destIdBinPointers[destBin]++] = destId;
         }
     }
-    for (unsigned int i=0; i<G->numBins; i++)
+    for (intV i=0; i<G->numBins; i++)
         destIdBinPointers[i] = 0;
 }
 
@@ -169,21 +211,21 @@ void writeDestIds(graph* G, partitionData* TD, unsigned int** destIdBins, unsign
 //////////// memory allocation ///////////
 //////////////////////////////////////////
 //allocate BIN x BIN space for offsets, pointers
-template <class T> T** allocateBinMat (unsigned int numRows, unsigned int numCols)
+template <class T> T** allocateBinMat (intV numRows, intV numCols)
 {
     T** pointerMat;
     pointerMat = new T* [numRows];
-    for (unsigned int i=0; i<numRows; i++)
+    for (intV i=0; i<numRows; i++)
         pointerMat[i] = new T [numCols]();
     return pointerMat;
 }
 
 //allocate BIN x BIN space for pointers
-template <class T> T*** allocateBinMatPtr (unsigned int numRows, unsigned int numCols)
+template <class T> T*** allocateBinMatPtr (intV numRows, intV numCols)
 {
     T*** pointerMat;
     pointerMat = new T** [numRows];
-    for (unsigned int i=0; i<numRows; i++)
+    for (intV i=0; i<numRows; i++)
         pointerMat[i] = new T* [numCols];
     return pointerMat;
 }
@@ -191,19 +233,19 @@ template <class T> T*** allocateBinMatPtr (unsigned int numRows, unsigned int nu
 //////////////////////////////////////////
 ////////////free the memory //////////////
 //////////////////////////////////////////
-template <class T> void freeMat (T** mat, unsigned int numRows)
+template <class T> void freeMat (T** mat, intV numRows)
 {
-    for (unsigned int i=0; i<numRows; i++)
+    for (intV i=0; i<numRows; i++)
         delete[] mat[i];
     delete[] mat; 
 }
 
-template <class T> void freeMatPtr (T*** mat, unsigned int numRows, unsigned int numCols)
+template <class T> void freeMatPtr (T*** mat, intV numRows, intV numCols)
 {
-    for (unsigned int i=0; i<numRows; i++)
-        for (unsigned int j=0; j<numCols; j++)
+    for (intV i=0; i<numRows; i++)
+        for (intV j=0; j<numCols; j++)
             delete[] mat[i][j];
-    for (unsigned int i=0; i<numRows; i++)
+    for (intV i=0; i<numRows; i++)
         delete[] mat[i];
     delete[] mat; 
 }

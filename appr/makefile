@@ -1,8 +1,21 @@
+#HUGE_EDGE=1
+#HUGE_VERTEX=1
+
+ifdef HUGE_EDGE
+INTE = -DHUGE_EDGE
+endif
+
+ifdef HUGE_VERTEX
+INTV = -DHUGE_VERTEX
+endif
+
+
 CC      = g++
-CPPFLAGS= -O3 -c -std=c++11 -fopenmp -mavx -w 
+CPPFLAGS= -O3 -c -std=c++11 -fopenmp -mavx -w $(INTE) $(INTV)
 LDFLAGS = -fopenmp -m64 -lpthread 
-SOURCES = nibble.cpp ../src/sort.cpp
+SOURCES = nibble.cpp 
 OBJECTS = $(SOURCES:.cpp=.o)
+
 
 all: $(SOURCES) nibble
 

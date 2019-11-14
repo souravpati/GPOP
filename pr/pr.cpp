@@ -21,24 +21,24 @@ float damping =0.15;
 
 struct PR_F{
     float* pageRank;
-    unsigned int* deg;
-    PR_F(float* _pcurr, unsigned int* _outDeg):pageRank(_pcurr), deg(_outDeg){}
-    inline float scatterFunc (unsigned int node)
+    intV* deg;
+    PR_F(float* _pcurr, intV* _outDeg):pageRank(_pcurr), deg(_outDeg){}
+    inline float scatterFunc (intV node)
     {
         return pageRank[node];
     }
 #ifndef DENSE
-    inline bool initFunc(unsigned int node)
+    inline bool initFunc(intV node)
     {
         pageRank[node]=0;
         return true;
     }
-    inline bool gatherFunc (float updateVal, unsigned int destId)
+    inline bool gatherFunc (float updateVal, intV destId)
     {
         pageRank[destId] += updateVal;
         return true;
     }
-    inline bool filterFunc(unsigned int node)
+    inline bool filterFunc(intV node)
     {
         pageRank[node] = ((damping) + (1-damping)*pageRank[node]);
         if (deg[node]>0)
@@ -46,15 +46,15 @@ struct PR_F{
         return true;
     } 
 #else
-    inline void initFunc(unsigned int node)
+    inline void initFunc(intV node)
     {
         pageRank[node]=0;
     }
-    inline void gatherFunc (float updateVal, unsigned int destId)
+    inline void gatherFunc (float updateVal, intV destId)
     {
         pageRank[destId] += updateVal;
     }
-    inline void filterFunc(unsigned int node)
+    inline void filterFunc(intV node)
     {
         pageRank[node] = ((damping) + (1-damping)*pageRank[node]);
         if (deg[node]>0)
@@ -79,9 +79,9 @@ int main(int argc, char** argv)
             pcurr[i] = 1.0;
     }
 #ifndef DENSE
-    unsigned int* initFrontier = new unsigned int [G.numVertex];
+    intV* initFrontier = new intV [G.numVertex];
 #pragma omp parallel for
-    for (unsigned int i=0; i<G.numVertex; i++)
+    for (intV i=0; i<G.numVertex; i++)
         initFrontier[i] = i;
     loadFrontier (&G, initFrontier, G.numVertex);
 #endif
