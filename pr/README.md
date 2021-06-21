@@ -1,5 +1,11 @@
 # README #
 
+## FLAG 
+Define `DENSE` flag to enable optimizations for dense active vertex frontier.
+
+
+## RUN
+
 Use the following commands to run
 
 1. make 
