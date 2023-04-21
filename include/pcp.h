@@ -53,8 +53,8 @@ intV NUM_BINS = 10000000/binWidth;
 #define ITERTIME
 #undef ITERTIME
 
-int NUM_THREADS = std::max(atoi(std::getenv("OMP_NUM_THREADS")), 1);
-unsigned int MAX_ITER = 1000000;
+int NUM_THREADS = std::max(omp_get_max_threads(), 1);
+unsigned int MAX_ITER = 10;
 
 
 
@@ -67,31 +67,31 @@ void initialize(graph* G, int argc, char** argv)
     {  
         if (i + 1 != argc)
         {
-            if (strcmp(argv[i], "-s") == 0) // This is your parameter name
+            if (strcmp(argv[i], "-s") == 0) // seed node 
             {                 
-                G->start = (intV)atoi(argv[i + 1]);    // The next value in the array is your value
-                i++;    // Move to the next flag
+                G->start = (intV)atoi(argv[i + 1]);    
+                i++;    
             }
-            if (strcmp(argv[i], "-t") == 0) // This is your parameter name
+            if (strcmp(argv[i], "-t") == 0) // num threads 
             {                 
-                NUM_THREADS = (unsigned int)atoi(argv[i + 1]);    // The next value in the array is your value
-                i++;    // Move to the next flag
+                NUM_THREADS = (unsigned int)atoi(argv[i + 1]);    
+                i++;    
             }
-            if (strcmp(argv[i], "-iter") == 0) // This is your parameter name
+            if (strcmp(argv[i], "-iter") == 0)  // num iterations
             {                 
-                MAX_ITER = (unsigned int)atoi(argv[i + 1]);    // The next value in the array is your value
-                i++;    // Move to the next flag
+                MAX_ITER = (unsigned int)atoi(argv[i + 1]);    
+                i++;    
             }
-            if (strcmp(argv[i], "-rounds") == 0) // This is your parameter name
+            if (strcmp(argv[i], "-rounds") == 0) 
             {                 
-                G->rounds = (unsigned int)atoi(argv[i + 1]);    // The next value in the array is your value
-                i++;    // Move to the next flag
+                G->rounds = (unsigned int)atoi(argv[i + 1]);   
+                i++;   
             }
         }
     }
     if (argc < 2)
     {
-        printf("Usage : %s <filename> -s <start node> -t <numThreads(optional)> -iter <#iterations(optional) -rounds <#rounds(default 3)> \n", argv[0]);
+        printf("Usage : %s <filename> -s <start node(not needed for pr)> -t <numThreads(optional)> -iter <#iterations(optional) -rounds <#rounds(default 3)> \n", argv[0]);
         exit(1);
     }
 
